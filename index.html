@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetris</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    /* =============================================
+       TETRIS — Web Edition
+       Author  : Claude (Anthropic)
+       Version : 1.0.0
+       License : MIT
+    ============================================= */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #07070e;
+      color: #e0e0e0;
+      font-family: 'Share Tech Mono', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      user-select: none;
+    }
+
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 6px;
+      color: #00f5c4;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+      text-shadow: 0 0 20px rgba(0, 245, 196, 0.35);
+    }
+
+    /* ---- Layout ---- */
+    #game-wrapper {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    /* ---- Canvas ---- */
+    #canvas-wrap { position: relative; }
+
+    #game-canvas {
+      display: block;
+      border: 1px solid #1a3a3a;
+      background: #06060c;
+      image-rendering: pixelated;
+    }
+
+    /* ---- Side panel ---- */
+    #side-panel {
+      width: 140px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel-box {
+      background: #0d1117;
+      border: 1px solid #1a2a2a;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    .panel-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: #4a8a7a;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .panel-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #00f5c4;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    #next-canvas { display: block; margin: 0 auto; }
+
+    /* ---- Controls hint ---- */
+    .panel-hint {
+      font-size: 10px;
+      color: #2a4a4a;
+      line-height: 1.9;
+      letter-spacing: 0.5px;
+    }
+
+    .panel-hint span { color: #3a6a5a; }
+
+    /* ---- Overlay (start / pause / game-over) ---- */
+    #overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 6, 12, 0.92);
+      border-radius: 4px;
+      z-index: 10;
+    }
+
+    #overlay-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 20px;
+      font-weight: 900;
+      color: #00f5c4;
+      letter-spacing: 3px;
+      margin-bottom: 6px;
+    }
+
+    #overlay-sub {
+      font-size: 12px;
+      color: #4a8a7a;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+    }
+
+    #start-btn {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      background: transparent;
+      border: 1px solid #00f5c4;
+      color: #00f5c4;
+      padding: 10px 28px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: background 0.15s;
+    }
+
+    #start-btn:hover { background: rgba(0, 245, 196, 0.1); }
+    #start-btn:active { background: rgba(0, 245, 196, 0.2); }
+
+    /* ---- Pause badge ---- */
+    #pause-notice {
+      display: none;
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,245,196,0.15);
+      border: 1px solid #00f5c4;
+      color: #00f5c4;
+      font-size: 10px;
+      letter-spacing: 2px;
+      padding: 3px 10px;
+      border-radius: 3px;
+      z-index: 5;
+    }
+
+    footer {
+      margin-top: 20px;
+      font-size: 10px;
+      color: #1a3a3a;
+      letter-spacing: 1px;
+    }
+
+    footer a { color: #2a5a5a; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+  <h1>Tetris</h1>
+
+  <div id="game-wrapper">
+
+    <!-- Main board -->
+    <div id="canvas-wrap">
+      <div id="pause-notice">PAUSED</div>
+      <canvas id="game-canvas" width="200" height="400"
+              aria-label="Tetris game board" role="img"></canvas>
+
+      <!-- Overlay: shown at start and game over -->
+      <div id="overlay" role="dialog" aria-live="polite">
+        <div id="overlay-title">TETRIS</div>
+        <div id="overlay-sub">press start to play</div>
+        <button id="start-btn">Start Game</button>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <div id="side-panel">
+
+      <div class="panel-box">
+        <div class="panel-label">Score</div>
+        <div class="panel-value" id="score-val">0</div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-label">Level</div>
+        <div class="panel-value" id="level-val">1</div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-label">Lines</div>
+        <div class="panel-value" id="lines-val">0</div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-label">Next</div>
+        <canvas id="next-canvas" width="80" height="80"
+                aria-label="Next tetromino preview"></canvas>
+      </div>
+
+      <div class="panel-box panel-hint">
+        <span>← →</span> move<br>
+        <span>↑</span> rotate<br>
+        <span>↓</span> soft drop<br>
+        <span>Space</span> hard drop<br>
+        <span>P</span> pause
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    open source &bull;
+    <a href="https://github.com/" target="_blank" rel="noopener">github</a>
+  </footer>
+
+<script>
+  "use strict";
+
+  // =============================================
+  // Constants
+  // =============================================
+  const COLS     = 10;
+  const ROWS     = 20;
+  const CELL_SZ  = 20;   // pixels per cell
+
+  /** Points awarded per number of lines cleared simultaneously, multiplied by current level. */
+  const SCORE_TABLE = [0, 100, 300, 500, 800];
+
+  /** Tick interval (ms) per level 1-10. */
+  const SPEEDS = [800, 700, 600, 500, 400, 300, 250, 200, 150, 100];
+
+  /** Tetromino colours (one per type). */
+  const COLORS = {
+    I: '#00f5c4',
+    O: '#f5c400',
+    T: '#c400f5',
+    S: '#00c4f5',
+    Z: '#f54400',
+    J: '#0044f5',
+    L: '#f58000',
+  };
+
+  /** Tetromino shapes as 2-D binary matrices. */
+  const SHAPES = {
+    I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    O: [[1,1],[1,1]],
+    T: [[0,1,0],[1,1,1],[0,0,0]],
+    S: [[0,1,1],[1,1,0],[0,0,0]],
+    Z: [[1,1,0],[0,1,1],[0,0,0]],
+    J: [[1,0,0],[1,1,1],[0,0,0]],
+    L: [[0,0,1],[1,1,1],[0,0,0]],
+  };
+
+  const PIECE_KEYS = Object.keys(SHAPES);
+
+  // =============================================
+  // DOM references
+  // =============================================
+  const gameCanvas    = document.getElementById('game-canvas');
+  const nextCanvas    = document.getElementById('next-canvas');
+  const gc            = gameCanvas.getContext('2d');
+  const nc            = nextCanvas.getContext('2d');
+  const overlay       = document.getElementById('overlay');
+  const overlayTitle  = document.getElementById('overlay-title');
+  const overlaySub    = document.getElementById('overlay-sub');
+  const startBtn      = document.getElementById('start-btn');
+  const pauseNotice   = document.getElementById('pause-notice');
+  const scoreEl       = document.getElementById('score-val');
+  const levelEl       = document.getElementById('level-val');
+  const linesEl       = document.getElementById('lines-val');
+
+  // =============================================
+  // Game state
+  // =============================================
+  let board, piece, nextPiece;
+  let score, level, lines;
+  let gameLoopId, running, paused;
+
+  // =============================================
+  // Board helpers
+  // =============================================
+
+  /** Create a blank ROWS × COLS board filled with 0. */
+  function newBoard() {
+    return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  }
+
+  // =============================================
+  // Piece helpers
+  // =============================================
+
+  /** Return a new random piece object positioned at the top-centre. */
+  function randomPiece() {
+    const key   = PIECE_KEYS[Math.floor(Math.random() * PIECE_KEYS.length)];
+    const shape = SHAPES[key].map(row => [...row]);
+    return {
+      type  : key,
+      color : COLORS[key],
+      shape,
+      x     : Math.floor((COLS - shape[0].length) / 2),
+      y     : 0,
+    };
+  }
+
+  /**
+   * Rotate a 2-D matrix 90° clockwise.
+   * @param {number[][]} shape
+   * @returns {number[][]}
+   */
+  function rotate(shape) {
+    const rows = shape.length, cols = shape[0].length;
+    const result = Array.from({ length: cols }, () => Array(rows).fill(0));
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++)
+        result[x][rows - 1 - y] = shape[y][x];
+    return result;
+  }
+
+  /**
+   * Check whether a piece fits at (bx, by) with optional override shape.
+   * @param {object} p     - The piece object.
+   * @param {number} bx    - Board x override (defaults to p.x).
+   * @param {number} by    - Board y override (defaults to p.y).
+   * @param {number[][]} [sh] - Shape override.
+   * @returns {boolean}
+   */
+  function fits(p, bx, by, sh) {
+    sh = sh !== undefined ? sh : p.shape;
+    bx = bx !== undefined ? bx : p.x;
+    by = by !== undefined ? by : p.y;
+    for (let y = 0; y < sh.length; y++) {
+      for (let x = 0; x < sh[y].length; x++) {
+        if (!sh[y][x]) continue;
+        const nx = bx + x, ny = by + y;
+        if (nx < 0 || nx >= COLS || ny >= ROWS) return false;
+        if (ny >= 0 && board[ny][nx]) return false;
+      }
+    }
+    return true;
+  }
+
+  // =============================================
+  // Game logic
+  // =============================================
+
+  /** Lock the current piece into the board, clear lines, spawn next piece. */
+  function lockPiece() {
+    // Stamp piece onto board
+    piece.shape.forEach((row, dy) =>
+      row.forEach((val, dx) => {
+        if (val && piece.y + dy >= 0)
+          board[piece.y + dy][piece.x + dx] = piece.color;
+      })
+    );
+
+    // Clear complete lines (scan bottom-up for correctness)
+    let cleared = 0;
+    for (let y = ROWS - 1; y >= 0; y--) {
+      if (board[y].every(cell => cell !== 0)) {
+        board.splice(y, 1);
+        board.unshift(Array(COLS).fill(0));
+        cleared++;
+        y++;  // re-check same row index after splice
+      }
+    }
+
+    // Update stats
+    if (cleared > 0) {
+      score += SCORE_TABLE[cleared] * level;
+      lines += cleared;
+      level  = Math.min(10, Math.floor(lines / 10) + 1);
+      resetSpeed();
+    }
+
+    // Advance pieces
+    piece     = nextPiece;
+    nextPiece = randomPiece();
+
+    // Detect top-out (game over)
+    if (!fits(piece)) {
+      triggerGameOver();
+      return;
+    }
+
+    drawNextPiece();
+  }
+
+  /** End the game and show the overlay. */
+  function triggerGameOver() {
+    running = false;
+    clearInterval(gameLoopId);
+    overlayTitle.textContent = 'GAME OVER';
+    overlaySub.textContent   = 'score: ' + score;
+    startBtn.textContent     = 'Play Again';
+    overlay.style.display    = 'flex';
+    pauseNotice.style.display = 'none';
+  }
+
+  /** Reset and start (or restart) the game. */
+  function startGame() {
+    board     = newBoard();
+    score     = 0;
+    level     = 1;
+    lines     = 0;
+    running   = true;
+    paused    = false;
+
+    piece     = randomPiece();
+    nextPiece = randomPiece();
+
+    overlay.style.display     = 'none';
+    pauseNotice.style.display = 'none';
+
+    drawNextPiece();
+    resetSpeed();
+    render();
+  }
+
+  /** Toggle pause state. */
+  function togglePause() {
+    if (!running) return;
+    paused = !paused;
+    pauseNotice.style.display = paused ? 'block' : 'none';
+  }
+
+  /** Reset the game-loop interval to match the current level speed. */
+  function resetSpeed() {
+    clearInterval(gameLoopId);
+    const interval = SPEEDS[level - 1] ?? 100;
+    gameLoopId = setInterval(tick, interval);
+  }
+
+  /** Called on each gravity tick. */
+  function tick() {
+    if (!running || paused) return;
+    if (fits(piece, piece.x, piece.y + 1)) {
+      piece.y++;
+    } else {
+      lockPiece();
+    }
+    render();
+  }
+
+  // =============================================
+  // Rendering
+  // =============================================
+
+  /**
+   * Draw a single filled cell with a subtle bevel.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x    - Board column.
+   * @param {number} y    - Board row.
+   * @param {string} color
+   * @param {number} [sz] - Cell size in pixels.
+   */
+  function drawCell(ctx, x, y, color, sz = CELL_SZ) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x * sz + 1, y * sz + 1, sz - 2, sz - 2);
+
+    // Top highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(x * sz + 1, y * sz + 1, sz - 2, 3);
+
+    // Bottom shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(x * sz + 1, y * sz + sz - 3, sz - 2, 3);
+  }
+
+  /**
+   * Draw a ghost piece showing where the active piece will land.
+   */
+  function drawGhost() {
+    let ghostY = piece.y;
+    while (fits(piece, piece.x, ghostY + 1)) ghostY++;
+    if (ghostY === piece.y) return;
+
+    piece.shape.forEach((row, dy) =>
+      row.forEach((val, dx) => {
+        if (!val) return;
+        gc.fillStyle = 'rgba(255,255,255,0.06)';
+        gc.fillRect(
+          (piece.x + dx) * CELL_SZ + 1,
+          (ghostY + dy) * CELL_SZ + 1,
+          CELL_SZ - 2,
+          CELL_SZ - 2
+        );
+      })
+    );
+  }
+
+  /** Full render pass: board + ghost + active piece + HUD update. */
+  function render() {
+    // Background
+    gc.fillStyle = '#06060c';
+    gc.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+    // Grid lines
+    gc.strokeStyle = 'rgba(255,255,255,0.025)';
+    gc.lineWidth   = 0.5;
+    for (let x = 0; x <= COLS; x++) {
+      gc.beginPath();
+      gc.moveTo(x * CELL_SZ, 0);
+      gc.lineTo(x * CELL_SZ, gameCanvas.height);
+      gc.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      gc.beginPath();
+      gc.moveTo(0, y * CELL_SZ);
+      gc.lineTo(gameCanvas.width, y * CELL_SZ);
+      gc.stroke();
+    }
+
+    // Locked cells
+    board.forEach((row, y) =>
+      row.forEach((color, x) => {
+        if (color) drawCell(gc, x, y, color);
+      })
+    );
+
+    // Ghost + active piece
+    if (piece) {
+      drawGhost();
+      piece.shape.forEach((row, dy) =>
+        row.forEach((val, dx) => {
+          if (val && piece.y + dy >= 0)
+            drawCell(gc, piece.x + dx, piece.y + dy, piece.color);
+        })
+      );
+    }
+
+    // HUD
+    scoreEl.textContent = score;
+    levelEl.textContent = level;
+    linesEl.textContent = lines;
+  }
+
+  /** Draw the next-piece preview canvas. */
+  function drawNextPiece() {
+    nc.fillStyle = '#0d1117';
+    nc.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+
+    const sh    = nextPiece.shape;
+    const pcols = sh[0].length;
+    const prows = sh.length;
+    const csz   = Math.min(16, Math.floor(60 / Math.max(pcols, prows)));
+    const ox    = Math.floor((nextCanvas.width  - pcols * csz) / 2);
+    const oy    = Math.floor((nextCanvas.height - prows * csz) / 2);
+
+    sh.forEach((row, dy) =>
+      row.forEach((val, dx) => {
+        if (!val) return;
+        nc.fillStyle = nextPiece.color;
+        nc.fillRect(ox + dx * csz + 1, oy + dy * csz + 1, csz - 2, csz - 2);
+        nc.fillStyle = 'rgba(255,255,255,0.12)';
+        nc.fillRect(ox + dx * csz + 1, oy + dy * csz + 1, csz - 2, 3);
+      })
+    );
+  }
+
+  // =============================================
+  // Input handling
+  // =============================================
+
+  document.addEventListener('keydown', e => {
+    if (!running || paused) return;
+    switch (e.key) {
+      case 'ArrowLeft':
+        if (fits(piece, piece.x - 1)) piece.x--;
+        render();
+        break;
+      case 'ArrowRight':
+        if (fits(piece, piece.x + 1)) piece.x++;
+        render();
+        break;
+      case 'ArrowDown':
+        if (fits(piece, piece.x, piece.y + 1)) piece.y++;
+        else lockPiece();
+        render();
+        break;
+      case 'ArrowUp': {
+        const rotated = rotate(piece.shape);
+        if (fits(piece, piece.x, piece.y, rotated)) piece.shape = rotated;
+        render();
+        break;
+      }
+      case ' ':
+        e.preventDefault();
+        while (fits(piece, piece.x, piece.y + 1)) piece.y++;
+        lockPiece();
+        render();
+        break;
+      case 'p':
+      case 'P':
+        togglePause();
+        break;
+    }
+  });
+
+  startBtn.addEventListener('click', startGame);
+
+  // =============================================
+  // Touch / mobile support (swipe gestures)
+  // =============================================
+  let touchStartX = null, touchStartY = null;
+
+  gameCanvas.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  gameCanvas.addEventListener('touchend', e => {
+    if (touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+
+    if (adx < 10 && ady < 10) {
+      // Tap = rotate
+      const rotated = rotate(piece.shape);
+      if (fits(piece, piece.x, piece.y, rotated)) piece.shape = rotated;
+    } else if (adx > ady) {
+      // Horizontal swipe
+      const dir = dx > 0 ? 1 : -1;
+      if (fits(piece, piece.x + dir)) piece.x += dir;
+    } else {
+      if (dy > 0) {
+        // Swipe down = hard drop
+        while (fits(piece, piece.x, piece.y + 1)) piece.y++;
+        lockPiece();
+      }
+    }
+    render();
+    touchStartX = touchStartY = null;
+  }, { passive: true });
+
+</script>
+</body>
+</html>
